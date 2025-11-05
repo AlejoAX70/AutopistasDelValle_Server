@@ -1,0 +1,47 @@
+{
+  "categorias": [
+    { "id_dinamica": 2, "categoria": "C2", "pesoMaximo": 5000 },
+    { "id_dinamica": 14, "categoria": "C2B1", "pesoMaximo": 500 },
+    { "id_dinamica": 11, "categoria": "C2R2", "pesoMaximo": 500 },
+    ...
+  ],
+  "dashboard": {
+    "totalVehiculos": 1104,
+    "pesoPromedio": 14829.62,
+    "conSobrepeso": 292,
+    "sinSobrepeso": 812,
+    "porcentajeSobrepeso": "26.45"
+  },
+  "data": [
+    {
+      "VehiculoId": 3954,
+      "Placa": "XFC036",
+      "Categoria": "C3S3",
+      "CantidadEjes": 3,
+      "FechaRegistro": "2025-10-10T14:48:01.713Z",
+      "PesoMaximo": 27675,
+      "PesoTotalRegistrado": 16160.14,
+      "EjesConExceso": "1",
+      "ExcesoTotal": 251.66,
+      "SobrePeso": "SI"
+    }
+    ...
+  ],
+  "pesosPorCategoria": [
+    { "Categoria": "C2", "PesoPromedio": 5116.81 },
+    { "Categoria": "C2R2", "PesoPromedio": 4759.46 },
+    ...
+  ],
+  "porcentajeCategoria": [
+    { "Categoria": "C2S2", "Porcentaje": 7.065217391304 },
+    { "Categoria": "C3S3", "Porcentaje": 6.884057971014 },
+    ...
+  ],
+  "tendenciaDiaria": [
+    { "Fecha": "2025-10-10T00:00:00.000Z", "TotalVehiculos": 1104 }
+  ],
+  "vehiculosPorHora": [
+    { "Hora": "10:00", "TotalVehiculos": 201 },
+    { "Hora": "11:00", "TotalVehiculos": 556 }
+  ]
+}

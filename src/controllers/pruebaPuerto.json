@@ -1,0 +1,9 @@
+{
+  "ultimaActualizacion": "2025-10-07T23:52:34.191Z",
+  "equipos": {
+    "estadoBasculaDinamica": false,
+    "estadoPlc": {},
+    "displayIngresoEstacion": false,
+    "displayEstatica": false
+  }
+}
