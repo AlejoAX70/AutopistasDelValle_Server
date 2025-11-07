@@ -58,6 +58,11 @@ function inicializarEventos(io, getTcpSocket) {
 
           if (state.loop === "Apagado") {
             console.log("Condicion apagado", state.sensores);
+
+            state.sensores.A = [];
+            state.sensores.B = [];
+            state.sensores.C = [];
+            state.sensores.D = [];
             pesoEmitter.emit("peso", { caseNumber: 3, data: {} });
           }
         } else {
@@ -92,7 +97,11 @@ function inicializarEventos(io, getTcpSocket) {
           }
         });
 
-        if (state.sensores.A.length == state.sensores.B.length) {
+       if (
+          state.sensores.A.length > 0 &&
+          state.sensores.B.length > 0 &&
+          state.sensores.A.length === state.sensores.B.length
+        ) {
           console.log("Vehiculo finalizado");
           pesoEmitter.emit("peso", { caseNumber: 4, data: {} });
         }
@@ -245,7 +254,7 @@ function inicializarEventos(io, getTcpSocket) {
                 sql.VarChar(50),
                 state.categoriaVehiculo ? state.categoriaVehiculo : "OTROS"
               )
-              .input("CantidadEjes", sql.Int, sensores.A.length + sensores.C.length)
+              .input("CantidadEjes", sql.Int, sensores.B.length)
               .input("Evasor", sql.Bit, pesoTotal > pesoMaximo  ? 1 : cumpleNorma ? 0 : 1)
               .input("PesoMaximo", sql.Decimal(10, 2), pesoMaximo ?? 0).query(`
           INSERT INTO VehiculosEnDinamica (Placa, Categoria, CantidadEjes, PesoMaximo, FechaRegistro, Evasor)
@@ -364,7 +373,7 @@ function inicializarEventos(io, getTcpSocket) {
               placa: state.placa || "XXX000",
               categoriaPorCamara: state.categoriaVehiculo || "No disponible",
               categoria: state.categoriaVehiculo ? state.categoriaVehiculo : "OTROS",
-              cantidadEjes: sensores.A.length + sensores.C.length,
+              cantidadEjes: sensores.B.length,
               pesoMaximoPermitido: pesoMaximo ?? 0,
               pesosPorEje: pesosEjes.map((eje) => {
                 const limite = limitesEjes.find(
@@ -427,12 +436,37 @@ function inicializarEventos(io, getTcpSocket) {
               0
             );
 
-            state.sensores.A = [];
-            state.sensores.B = [];
-            state.sensores.C = [];
-            state.sensores.D = [];
-
             // Comparar contra el peso máximo permitido
+            const sobrePesoTotal = pesoTotalVehiculo > (pesoMaximo ?? 0);
+
+            // ========================
+            // CONTROL DE SEMÁFOROS SEGÚN PESO TOTAL
+            // ========================
+            if (sobrePesoTotal) {
+              // ⚠️ Vehículo con sobrepeso → debe ir a báscula estática
+              state.semaforoIngresoEstaticaVerde = true;
+              state.semaforoIngresoEstaticaVerde = true;
+              state.semaforoIngresoEstaticaRojo = false;
+
+              state.semaforoSalidaNacionalVerde = false;
+              state.semaforoSalidaNacionalRojo = true;
+
+              console.log(
+                `🚦 Vehículo con sobrepeso: ${pesoTotalVehiculo} > ${pesoMaximo}`
+              );
+            } else {
+              // ✅ Vehículo dentro del límite → habilitar salida a nacional
+              state.semaforoIngresoEstaticaVerde = true;
+              state.semaforoSalidaNacionalVerde = true;
+              state.semaforoSalidaNacionalRojo = false;
+
+              state.semaforoIngresoEstaticaRojo = true;
+              state.semaforoIngresoEstaticaVerde = false;
+
+              console.log(
+                `🚦 Vehículo en norma: ${pesoTotalVehiculo} <= ${pesoMaximo}`
+              );
+            }
 
             const tcpSocket = getTcpSocket();
             if (tcpSocket && !tcpSocket.destroyed) {
