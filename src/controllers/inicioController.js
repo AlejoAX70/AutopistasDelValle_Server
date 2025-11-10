@@ -34,7 +34,10 @@ async function getAllInitData(io) {
       ingresoEstatica: ["ingresoEstatica"],
       salidaNacional: ["salidaNacional"],
       autorizarPesaje: ['autorizarPesaje'],
-      noRunt: ['noRunt']
+      noRunt: ['noRunt'],
+      placaIp: ['placaIp'],
+      rutaPlacaIp: ['rutaPlacaIp'],
+      rutaPlacasProcesadas: ['rutaPlacaProcesada']
     };
 
     // Ejecuta todas las consultas en paralelo
@@ -54,7 +57,10 @@ async function getAllInitData(io) {
       ingresoEstatica,
       salidaNacional,
       autorizarPesaje,
-      noRunt
+      noRunt,
+      placaIp,
+      rutaPlacaIp,
+      rutaPlacasProcesadas
     ] = await Promise.all(
       Object.values(configGroups).map(params => getConfigValues(pool, params))
     );
@@ -94,6 +100,20 @@ async function getAllInitData(io) {
     if(noRunt.length > 0){
       state.noRuntState = noRunt[0].valor
     }
+
+    if(placaIp.length > 0){
+      state.placaIp = placaIp[0].valor
+    }
+
+    if(rutaPlacaIp.length > 0){
+      state.rutaPlacaIp = rutaPlacaIp[0].valor
+    }
+
+    if(rutaPlacasProcesadas.length > 0){
+      state.rutaPlacaProcesada = rutaPlacasProcesadas[0].valor
+    }
+
+    
     
     // Asignaciones automáticas
     if (rutaFotos.length > 0) state.rutaFotoPlaca = rutaFotos[0].valor;
@@ -122,7 +142,7 @@ async function getAllInitData(io) {
       state.portDisplayIngresoEstacion = ingreso[1].valor;
     }
 
-    // Puedes devolver algo informativo
+  
     return true;
 
   } catch (error) {

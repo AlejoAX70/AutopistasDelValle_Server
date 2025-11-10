@@ -34,6 +34,9 @@ let state = {
   portDisplayEstatica: "5002",
   ipDisplayIngresoEstacion: "127.0.0.1",
   portDisplayIngresoEstacion: "5003",
+  placaIp: "No",
+  rutaPlacaIp: "E:/nueva dinamica/Back/src/placas",
+  rutaPlacaProcesada: "E:/nueva dinamica/Back/src/placasProcesadas",
   pesos: {
     A: 0,
     B: 0,

@@ -9,8 +9,12 @@ const { sensores, pesos, vehiculoActual } =
   require("../utils/systemSate").state;
 const { state } = require("../utils/systemSate");
 const { getConnection, sql } = require("../database/connection");
-const { ingreso_estatica, salida_nacional } = require("../controllers/plcController");
-
+const {
+  ingreso_estatica,
+  salida_nacional,
+} = require("../controllers/plcController");
+const fs = require("fs");
+const path = require("path");
 // Aquí mueves todo el switch (case 0,1,2,3,4)
 // y lo de emitir el paquete al frontend con `io.emit`
 
@@ -92,9 +96,11 @@ function inicializarEventos(io, getTcpSocket) {
           }
         });
 
-        if (state.sensores.A.length > 0 &&
+        if (
+          state.sensores.A.length > 0 &&
           state.sensores.B.length > 0 &&
-          state.sensores.A.length === state.sensores.B.length) {
+          state.sensores.A.length === state.sensores.B.length
+        ) {
           console.log("Vehiculo finalizado");
           pesoEmitter.emit("peso", { caseNumber: 4, data: {} });
         }
@@ -172,7 +178,6 @@ function inicializarEventos(io, getTcpSocket) {
             );
 
             // 2. Insertar paso de vehículo con el peso máximo
-          
 
             // Traer los límites por eje de la categoría clasificada
             const limitesEjesQuery = await pool
@@ -222,24 +227,62 @@ function inicializarEventos(io, getTcpSocket) {
                 }
               }
             }
-            
+
             const pesosPorEje = pesosEjes.map((eje) => {
-                const limite = limitesEjes.find(
-                  (l) => l.NumeroEje === eje.numeroEje
-                );
-                return {
-                  numeroEje: eje.numeroEje,
-                  pesoRegistrado: eje.peso,
-                  pesoPermitido: limite?.PesoMaximoPermitido ?? 0,
-                  exceso: limite
-                    ? Math.max(0, eje.peso - limite.PesoMaximoPermitido)
-                    : 0,
-                };
-              })
+              const limite = limitesEjes.find(
+                (l) => l.NumeroEje === eje.numeroEje
+              );
+              return {
+                numeroEje: eje.numeroEje,
+                pesoRegistrado: eje.peso,
+                pesoPermitido: limite?.PesoMaximoPermitido ?? 0,
+                exceso: limite
+                  ? Math.max(0, eje.peso - limite.PesoMaximoPermitido)
+                  : 0,
+              };
+            });
 
-            const pesoTotal = pesosPorEje.reduce((sum, eje) => sum + eje.pesoRegistrado, 0);
+            const pesoTotal = pesosPorEje.reduce(
+              (sum, eje) => sum + eje.pesoRegistrado,
+              0
+            );
 
-              const vehiculoResult = await pool
+            let placaFinal = state.placa || "XXX000";
+
+            if (state.placaIp.toLowerCase() === "no") {
+              try {
+                const carpeta = state.rutaPlacaIp;
+                const archivos = fs
+                  .readdirSync(carpeta)
+                  .map((nombre) => {
+                    const rutaCompleta = path.join(carpeta, nombre);
+                    const stats = fs.statSync(rutaCompleta);
+                    return { nombre, tiempo: stats.mtimeMs };
+                  })
+                  .sort((a, b) => b.tiempo - a.tiempo); // último archivo primero
+
+                if (archivos.length > 0) {
+                  const ultimoArchivo = archivos[0].nombre;
+                  // Quitar extensión .jpg (o cualquier otra)
+                  placaFinal = path.basename(
+                    ultimoArchivo,
+                    path.extname(ultimoArchivo)
+                  );
+                  console.log("📸 Placa detectada desde carpeta:", placaFinal);
+                } else {
+                  console.warn(
+                    "⚠️ No se encontraron archivos en la carpeta:",
+                    carpeta
+                  );
+                }
+              } catch (err) {
+                console.error("❌ Error buscando la placa desde carpeta:", err);
+              }
+            } else {
+              console.log("ℹ️ Usando placa desde cámara IP:", state.placa);
+            }
+
+            const vehiculoResult = await pool
               .request()
               .input("Placa", sql.VarChar(20), state.placa || "XXX000") // puedes reemplazar por placa real
               .input(
@@ -247,8 +290,16 @@ function inicializarEventos(io, getTcpSocket) {
                 sql.VarChar(50),
                 state.categoriaVehiculo ? state.categoriaVehiculo : "OTROS"
               )
-              .input("CantidadEjes", sql.Int, sensores.A.length + sensores.C.length)
-              .input("Evasor", sql.Bit, pesoTotal > pesoMaximo  ? 1 : cumpleNorma ? 0 : 1)
+              .input(
+                "CantidadEjes",
+                sql.Int,
+                sensores.A.length + sensores.C.length
+              )
+              .input(
+                "Evasor",
+                sql.Bit,
+                pesoTotal > pesoMaximo ? 1 : cumpleNorma ? 0 : 1
+              )
               .input("PesoMaximo", sql.Decimal(10, 2), pesoMaximo ?? 0).query(`
           INSERT INTO VehiculosEnDinamica (Placa, Categoria, CantidadEjes, PesoMaximo, FechaRegistro, Evasor)
           OUTPUT INSERTED.VehiculoId
@@ -363,9 +414,11 @@ function inicializarEventos(io, getTcpSocket) {
             // ========================
             const paqueteFront = {
               vehiculoId, // el que insertaste en BD
-              placa: state.placa || "XXX000",
+              placa: placaFinal || "XXX000",
               categoriaPorCamara: state.categoriaVehiculo || "No disponible",
-              categoria: state.categoriaVehiculo ? state.categoriaVehiculo : "OTROS",
+              categoria: state.categoriaVehiculo
+                ? state.categoriaVehiculo
+                : "OTROS",
               cantidadEjes: sensores.A.length + sensores.C.length,
               pesoMaximoPermitido: pesoMaximo ?? 0,
               pesosPorEje: pesosEjes.map((eje) => {
@@ -411,16 +464,18 @@ function inicializarEventos(io, getTcpSocket) {
               "📤 Paquete enviado al front:",
               JSON.stringify(paqueteFront, null, 2)
             );
-         
+
             if (cumpleNorma) {
               // ✅ Vehículo dentro del límite → habilitar salida a nacional
-               const salida = await salida_nacional()
-               console.log("Salida nacional",salida);
+              const salida = await salida_nacional();
+              console.log("Salida nacional", salida);
             } else {
               // ⚠️ Vehículo con sobrepeso → debe ir a báscula estática
-              const ingreso =  await ingreso_estatica()
-              console.log("Ingreso estatica: ",ingreso);
-              console.log("🚦 Vehículo con sobrepeso → Semáforo Estática VERDE");
+              const ingreso = await ingreso_estatica();
+              console.log("Ingreso estatica: ", ingreso);
+              console.log(
+                "🚦 Vehículo con sobrepeso → Semáforo Estática VERDE"
+              );
             }
 
             // Calcular peso total del vehículo
@@ -473,6 +528,49 @@ function inicializarEventos(io, getTcpSocket) {
             state.vehiculoActual.length = 0; // limpiar para siguiente vehículo
           }
         })();
+
+        setTimeout(() => {
+          if (
+            state.placaIp &&
+            state.placaIp.toLowerCase &&
+            state.placaIp.toLowerCase() === "no"
+          ) {
+            try {
+              const carpetaOrigen = state.rutaPlacaIp;
+              const carpetaDestino =
+                state.rutaPlacaProcesada ||
+                path.join(carpetaOrigen, "procesadas");
+
+              if (!fs.existsSync(carpetaDestino)) {
+                fs.mkdirSync(carpetaDestino, { recursive: true });
+                console.log("📂 Carpeta destino creada:", carpetaDestino);
+              }
+
+              // Buscar la imagen más reciente (ya que la usaste)
+              const archivos = fs
+                .readdirSync(carpetaOrigen)
+                .map((nombre) => {
+                  const ruta = path.join(carpetaOrigen, nombre);
+                  const stats = fs.statSync(ruta);
+                  return { nombre, ruta, mtime: stats.mtimeMs };
+                })
+                .sort((a, b) => b.mtime - a.mtime);
+
+              if (archivos.length > 0) {
+                const archivo = archivos[0]; // el más reciente
+                const origen = archivo.ruta;
+                const destino = path.join(carpetaDestino, archivo.nombre);
+
+                fs.renameSync(origen, destino);
+                console.log(`📸 Imagen movida a: ${destino}`);
+              } else {
+                console.warn("⚠️ No se encontró ninguna imagen para mover.");
+              }
+            } catch (err) {
+              console.error("❌ Error moviendo la imagen de placa:", err);
+            }
+          }
+        }, 500);
 
         break;
       default:
