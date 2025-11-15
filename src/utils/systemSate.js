@@ -69,7 +69,8 @@ let state = {
   soloEstaticaState: '37',
   soloNacionalState: '38',
   automaticoState: '39',
-  port: 3005
+  port: 3005,
+  categoriasCache: null
 };
 
 // Exportamos para usarlos en otros módulos

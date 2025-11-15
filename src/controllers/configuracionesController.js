@@ -49,19 +49,32 @@ async function getInitialData(req, res) {
       FROM configuraciones
     `;
 
+    const queryRangos = `
+      SELECT 
+        r.Id,
+        r.CategoriaId,
+        c.categoria AS NombreCategoria,
+        r.RangoOrden,
+        r.Minimo,
+        r.Maximo
+    FROM dinamica2.dbo.RangosEjes r
+    INNER JOIN dinamica2.dbo.categorias c
+          ON r.CategoriaId = c.id_dinamica;
+    `
+
     // ==========================
     // 6️⃣ Ejecución de consultas
     // ==========================
     const request = pool.request();
 
     // ✅ Todas las consultas que usan variables comparten el mismo request
-    const [limitesResult, categoriasResult, configuracionesResult, usersResult] =
+    const [limitesResult, categoriasResult, configuracionesResult, usersResult, rangosResult] =
       await Promise.all([
         request.query(queryLimitesEjes),
         request.query(queryCategorias),
         request.query(queryConfiguraciones),
         request.query(queryUsers),
-
+        request.query(queryRangos),
       ]);
 
     // ==========================
@@ -71,6 +84,7 @@ async function getInitialData(req, res) {
     const categorias = categoriasResult.recordset;
     const configuraciones = configuracionesResult.recordset;
     const users = usersResult.recordset;
+    const rangos = rangosResult.recordset;
 
 
     // ==========================
@@ -80,7 +94,8 @@ async function getInitialData(req, res) {
       limites,
       categorias,
       configuraciones,
-      users
+      users,
+      rangos
     });
   } catch (error) {
     console.error("Error en getAllDashboard:", error);
@@ -422,6 +437,63 @@ async function restartServer(req, res) {
   
 }
 
+async function camaraEjes(req, res) {
+  console.log("Campos:", req.body);
+  console.log("Archivos:", req.files);
+
+  res.status(200).send("OK");
+
+//   setImmediate( async () => {
+//     try {
+//       const xmlFile = req.files.find(f => f.fieldname === "event_data");
+
+//       if (!xmlFile) {
+//         return res.status(400).send("No se recibió el XML");
+//       }
+
+//       const xmlText = xmlFile.buffer.toString("utf8");
+
+//       // Crear parser
+//       const parser = new xml2js.Parser({ explicitArray: false });
+
+//       // Convertir XML a JSON
+//       const jsonResult = await parser.parseStringPromise(xmlText);
+
+//       console.log("📄 JSON parseado:", jsonResult);
+
+//       const classE13 = jsonResult?.result?.vac?.vehicle0?.class_e13?.$?.value;
+
+//       const euro13Classes = {
+//         1: "N/A",
+//         2: "C2",
+//         3: "C3",
+//         4: "C4",
+//         5: "C2R2",
+//         6: "C3R2 ",
+//         7: "C2S1",
+//         8: "C2S2",
+//         9: "C2S3",
+//         10: "C3S2",
+//         11: "C3S3",
+//         12: "OTROS",
+//       };
+
+//       const claseFinal = euro13Classes[classE13]
+
+//       console.log("📄 Camara Categoria:", claseFinal);
+      
+//     } catch (err) {
+//       console.log("Error:", err);
+//     }
+//   });
+
+
+
+  
+
+
+
+}
 
 
 
@@ -429,4 +501,4 @@ async function restartServer(req, res) {
 
 
 
-module.exports = { getInitialData, createCategoria, editCategoria, createLimite, editLimite, editGlobalConfig, createUser, EditUser, restartServer };
+module.exports = { getInitialData, createCategoria, editCategoria, createLimite, editLimite, editGlobalConfig, createUser, EditUser, restartServer, camaraEjes };

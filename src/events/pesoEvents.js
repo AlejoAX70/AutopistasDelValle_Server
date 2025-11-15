@@ -15,8 +15,11 @@ const {
 } = require("../controllers/plcController");
 const fs = require("fs");
 const path = require("path");
+const { s } = require("node-opcua");
 // Aquí mueves todo el switch (case 0,1,2,3,4)
 // y lo de emitir el paquete al frontend con `io.emit`
+
+let ocupado = false
 
 function inicializarEventos(io, getTcpSocket) {
   pesoEmitter.on("peso", async ({ caseNumber, data }) => {
@@ -78,12 +81,30 @@ function inicializarEventos(io, getTcpSocket) {
         console.log("vehiculoActual 3", state.vehiculoActual);
 
         state.loop = "Apagado";
-        state.vehiculoActual.forEach((registro) => {
-          const canal = registro.canal;
-          if (state.sensores[canal]) {
-            state.sensores[canal].push(registro);
-          }
-        });
+        const datosSen = state.vehiculoActual;
+
+        // Validar arreglo
+        if (!Array.isArray(datosSen) || datosSen.length === 0) {
+          console.log("❌ No hay datos en vehiculoActual");
+          return;
+        }
+
+        // Crear nuevo objeto sensores SIN conservar los anteriores
+        const sensoresTemp = {
+          A: datosSen.filter((d) => d.canal === "A"),
+          B: datosSen.filter((d) => d.canal === "B"),
+          C: datosSen.filter((d) => d.canal === "C"),
+          D: datosSen.filter((d) => d.canal === "D"),
+        };
+
+        // Guardar al state reemplazando completamente los datos anteriores
+        state.sensores = {
+          ...state.sensores,
+          ...sensoresTemp,
+        };
+
+        console.log("Senso: ", state.sensores);
+        
 
         Object.keys(state.sensores).forEach((canal) => {
           const registros = state.sensores[canal];
@@ -145,6 +166,16 @@ function inicializarEventos(io, getTcpSocket) {
           state.categoriasCache
         );
 
+        console.log("posClasi: ", clasificacion);
+        
+        if (ocupado) {
+          console.log("⚠️ El sistema está ocupado procesando otro vehículo. Ignorando este evento.");
+          return;
+        }
+
+
+        ocupado = true; // Marcar como ocupado
+
         // ========================
         // Guardar en la BD
         // ========================
@@ -160,7 +191,7 @@ function inicializarEventos(io, getTcpSocket) {
               .input(
                 "Categoria",
                 sql.VarChar(50),
-                clasificacion ? clasificacion : "OTROS"
+                state.categoriaVehiculo ? state.categoriaVehiculo : clasificacion ? clasificacion: "OTROS"
               ).query(`
           SELECT TOP 1 pesoMaximo 
           FROM categorias 
@@ -193,8 +224,8 @@ function inicializarEventos(io, getTcpSocket) {
             const limitesEjes = limitesEjesQuery.recordset;
             console.log("📌 Límites legales por eje:", limitesEjes);
 
-            const pesosEjes = sensores.B.map((itemB, index) => {
-              const itemD = sensores.D[index];
+            const pesosEjes = state.sensores.B.map((itemB, index) => {
+              const itemD = state.sensores.D[index];
 
               const pesoIzq = (itemB.peso1 ?? 0) + (itemB.peso2 ?? 0);
               const pesoDer = itemD
@@ -249,7 +280,7 @@ function inicializarEventos(io, getTcpSocket) {
 
             let placaFinal = state.placa || "XXX000";
 
-            if (state.placaIp.toLowerCase() === "no") {
+            if (!state.placaIp.toLowerCase() === "no") {
               try {
                 const carpeta = state.rutaPlacaIp;
                 const archivos = fs
@@ -418,8 +449,8 @@ function inicializarEventos(io, getTcpSocket) {
               categoriaPorCamara: state.categoriaVehiculo || "No disponible",
               categoria: state.categoriaVehiculo
                 ? state.categoriaVehiculo
-                : "OTROS",
-              cantidadEjes: sensores.A.length + sensores.C.length,
+                : clasificacion || "OTROS",
+              cantidadEjes: state.sensores.A.length,
               pesoMaximoPermitido: pesoMaximo ?? 0,
               pesosPorEje: pesosEjes.map((eje) => {
                 const limite = limitesEjes.find(
@@ -434,8 +465,8 @@ function inicializarEventos(io, getTcpSocket) {
                     : 0,
                 };
               }),
-              lecturasSensores: Object.keys(sensores).flatMap((canal) =>
-                sensores[canal].map((lectura) => ({
+              lecturasSensores: Object.keys(state.sensores).flatMap((canal) =>
+                state.sensores[canal].map((lectura) => ({
                   canal: lectura.canal,
                   tipo: lectura.tipo,
                   peso1: lectura.peso1,
@@ -527,50 +558,11 @@ function inicializarEventos(io, getTcpSocket) {
           } finally {
             state.vehiculoActual.length = 0; // limpiar para siguiente vehículo
           }
+
+          setTimeout(() => {
+            ocupado = false; // Liberar el sistema después de procesar
+          }, 200); // Ajusta el tiempo según sea necesario
         })();
-
-        setTimeout(() => {
-          if (
-            state.placaIp &&
-            state.placaIp.toLowerCase &&
-            state.placaIp.toLowerCase() === "no"
-          ) {
-            try {
-              const carpetaOrigen = state.rutaPlacaIp;
-              const carpetaDestino =
-                state.rutaPlacaProcesada ||
-                path.join(carpetaOrigen, "procesadas");
-
-              if (!fs.existsSync(carpetaDestino)) {
-                fs.mkdirSync(carpetaDestino, { recursive: true });
-                console.log("📂 Carpeta destino creada:", carpetaDestino);
-              }
-
-              // Buscar la imagen más reciente (ya que la usaste)
-              const archivos = fs
-                .readdirSync(carpetaOrigen)
-                .map((nombre) => {
-                  const ruta = path.join(carpetaOrigen, nombre);
-                  const stats = fs.statSync(ruta);
-                  return { nombre, ruta, mtime: stats.mtimeMs };
-                })
-                .sort((a, b) => b.mtime - a.mtime);
-
-              if (archivos.length > 0) {
-                const archivo = archivos[0]; // el más reciente
-                const origen = archivo.ruta;
-                const destino = path.join(carpetaDestino, archivo.nombre);
-
-                fs.renameSync(origen, destino);
-                console.log(`📸 Imagen movida a: ${destino}`);
-              } else {
-                console.warn("⚠️ No se encontró ninguna imagen para mover.");
-              }
-            } catch (err) {
-              console.error("❌ Error moviendo la imagen de placa:", err);
-            }
-          }
-        }, 500);
 
         break;
       default:

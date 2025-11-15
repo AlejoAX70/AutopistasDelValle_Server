@@ -1,3 +1,4 @@
+const { LogLevel } = require("node-opcua");
 const { getConnection, sql } = require("../database/connection");
 const { state } = require("../utils/systemSate");
 
@@ -11,6 +12,9 @@ async function cargarCategorias() {
     JOIN RangosEjes re ON cv.id_dinamica = re.CategoriaId
     ORDER BY cv.categoria, re.RangoOrden
   `);
+
+ 
+  
 
   const categorias = [];
   for (const row of result.recordset) {
@@ -27,6 +31,10 @@ async function cargarCategorias() {
 }
 
 function clasificarVehiculo(distancias, categorias) {
+
+  console.log("distancias: ", distancias);
+  console.log(JSON.stringify(categorias, null, 2));
+
   for (const categoria of categorias) {
     if (categoria.rangos.length !== distancias.length) continue;
 

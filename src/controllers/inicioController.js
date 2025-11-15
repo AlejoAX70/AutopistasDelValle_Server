@@ -113,8 +113,6 @@ async function getAllInitData(io) {
       state.rutaPlacaProcesada = rutaPlacasProcesadas[0].valor
     }
 
-    
-    
     // Asignaciones automáticas
     if (rutaFotos.length > 0) state.rutaFotoPlaca = rutaFotos[0].valor;
     if (camaraPlacas.length > 1) {
